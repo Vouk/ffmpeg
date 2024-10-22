@@ -2,8 +2,8 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
 	 xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
-	<?define ProductVersion = "7.0.2" ?>
-	<?define FFmpegBinDir = "C:\Users\daniel\Downloads\ffmpeg-n7.0-latest-win64-lgpl-shared-7.0\bin\" ?>
+	<?define ProductVersion = "7.1" ?>
+	<?define FFmpegBinDir = "C:\Users\daniel\Downloads\ffmpeg-n7.1-7-g63f5c007a7-win64-gpl-shared-7.1\bin\" ?>
 
 	<Product Id="*"
 			 Name="FFmpeg (LGPL)"

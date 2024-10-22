@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31912.275
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg GPL", "FFmpeg GPL.wixproj", "{6DE52F55-7D66-406F-A45D-D0D0DC10B8A6}"
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg GPL", "FFmpeg GPL.wixproj", "{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}"
 EndProject
-Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg LGPL", "FFmpeg LGPL.wixproj", "{EE9946B2-62DB-4674-A81B-65765F99A092}"
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg LGPL", "FFmpeg LGPL.wixproj", "{DE353D43-0681-4E81-A222-33098EA99CBE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,14 +13,14 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{6DE52F55-7D66-406F-A45D-D0D0DC10B8A6}.Debug|x64.ActiveCfg = Debug|x64
-		{6DE52F55-7D66-406F-A45D-D0D0DC10B8A6}.Debug|x64.Build.0 = Debug|x64
-		{6DE52F55-7D66-406F-A45D-D0D0DC10B8A6}.Release|x64.ActiveCfg = Release|x64
-		{6DE52F55-7D66-406F-A45D-D0D0DC10B8A6}.Release|x64.Build.0 = Release|x64
-		{EE9946B2-62DB-4674-A81B-65765F99A092}.Debug|x64.ActiveCfg = Debug|x64
-		{EE9946B2-62DB-4674-A81B-65765F99A092}.Debug|x64.Build.0 = Debug|x64
-		{EE9946B2-62DB-4674-A81B-65765F99A092}.Release|x64.ActiveCfg = Release|x64
-		{EE9946B2-62DB-4674-A81B-65765F99A092}.Release|x64.Build.0 = Release|x64
+		{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}.Debug|x64.ActiveCfg = Debug|x64
+		{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}.Debug|x64.Build.0 = Debug|x64
+		{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}.Release|x64.ActiveCfg = Release|x64
+		{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}.Release|x64.Build.0 = Release|x64
+		{DE353D43-0681-4E81-A222-33098EA99CBE}.Debug|x64.ActiveCfg = Debug|x64
+		{DE353D43-0681-4E81-A222-33098EA99CBE}.Debug|x64.Build.0 = Debug|x64
+		{DE353D43-0681-4E81-A222-33098EA99CBE}.Release|x64.ActiveCfg = Release|x64
+		{DE353D43-0681-4E81-A222-33098EA99CBE}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
