@@ -1,4 +1,4 @@
-name: Build Shared FFmpeg GPL/LGPL
+name: Build Shared FFmpeg GPL/LGPL (with debug)
 
 on:
   workflow_dispatch:
