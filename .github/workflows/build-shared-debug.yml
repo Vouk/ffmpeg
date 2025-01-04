@@ -145,7 +145,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64]
-        variant: [lgpl-shared 7.1,gpl-shared 7.1,lgpl-shared 7.1 debug,gpl-shared 7.1 debug]
+        variant: [lgpl-shared 7.1,gpl-shared 7.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -210,7 +210,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64]
-        variant: [lgpl-shared 7.1,gpl-shared 7.1,lgpl-shared 7.1 debug,gpl-shared 7.1 debug]
+        variant: [lgpl-shared 7.1,gpl-shared 7.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -225,7 +225,7 @@ jobs:
       - name: Build ffmpeg
         run: |
           T="$(echo -n ${{ github.token }} | sha256sum | head -c 64)" && echo -e "::add-mask::${T}\n::stop-commands::${T}"
-          ./build.sh ${{ matrix.target }} ${{ matrix.variant }}
+          ./build.sh ${{ matrix.target }} ${{ matrix.variant }} debug
       - name: Replace spaces in string
         id: strs
         run: |
@@ -246,7 +246,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64]
-        variant: [lgpl-shared 7.1,gpl-shared 7.1,lgpl-shared 7.1 debug,gpl-shared 7.1 debug]
+        variant: [lgpl-shared 7.1,gpl-shared 7.1]
     steps:
       - name: Replace spaces in string
         id: strs
