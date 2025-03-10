@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/zapping-vbi/zvbi"
-SCRIPT_COMMIT="7a76c67ac747c5f7ea0b9cd0a90b2e6688a305de"
+SCRIPT_COMMIT="348a44219c9b097a60359f9821d4923bc0bbe047"
 
 ffbuild_enabled() {
     return 0
