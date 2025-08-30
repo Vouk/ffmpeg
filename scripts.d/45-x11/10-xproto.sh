@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://gitlab.freedesktop.org/xorg/proto/xorgproto.git"
-SCRIPT_COMMIT="9d5e1d1dc150e0eb3a562020f2069fad7ec9b3a9"
+SCRIPT_COMMIT="ce7786ebb90f70897f8038d02ae187ab22766ab2"
 
 ffbuild_enabled() {
     [[ $TARGET != linux* ]] && return -1
@@ -26,5 +26,5 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 }

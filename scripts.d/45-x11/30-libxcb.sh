@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://gitlab.freedesktop.org/xorg/lib/libxcb.git"
-SCRIPT_COMMIT="daf2c5397607c32c3814f02831b9c1158fd1e52c"
+SCRIPT_COMMIT="6a7661f60a70ff42c64b32a725edcbee790d1c0d"
 
 ffbuild_enabled() {
     [[ $TARGET != linux* ]] && return -1
@@ -33,9 +33,9 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 
-    for LIBNAME in "$FFBUILD_PREFIX"/lib/libxcb*.so.?; do
+    for LIBNAME in "$FFBUILD_DESTPREFIX"/lib/libxcb*.so.?; do
         gen-implib "$LIBNAME" "${LIBNAME%%.*}.a"
         rm "${LIBNAME%%.*}"{.so*,.la}
     done

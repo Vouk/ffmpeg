@@ -1,7 +1,12 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/intel/libva.git"
-SCRIPT_COMMIT="3da1ba7e3cac635c6dc4d5d4cd1234d386926b49"
+SCRIPT_COMMIT="29fbbd8a913b2529cef8e63548093aa25c2669b8"
+
+ffbuild_depends() {
+    echo base
+    echo x11
+}
 
 ffbuild_enabled() {
     [[ $ADDINS_STR == *4.4* && $TARGET == win* ]] && return -1
@@ -57,15 +62,15 @@ ffbuild_dockerbuild() {
 
     meson "${myconf[@]}" ..
     ninja -j"$(nproc)"
-    ninja install
+    DESTDIR="$FFBUILD_DESTDIR" ninja install
 
     if [[ $TARGET == linux* ]]; then
-        gen-implib "$FFBUILD_PREFIX"/lib/{libva.so.2,libva.a}
-        gen-implib "$FFBUILD_PREFIX"/lib/{libva-drm.so.2,libva-drm.a}
-        gen-implib "$FFBUILD_PREFIX"/lib/{libva-x11.so.2,libva-x11.a}
-        rm "$FFBUILD_PREFIX"/lib/libva{,-drm,-x11}.so*
+        gen-implib "$FFBUILD_DESTPREFIX"/lib/{libva.so.2,libva.a}
+        gen-implib "$FFBUILD_DESTPREFIX"/lib/{libva-drm.so.2,libva-drm.a}
+        gen-implib "$FFBUILD_DESTPREFIX"/lib/{libva-x11.so.2,libva-x11.a}
+        rm "$FFBUILD_DESTPREFIX"/lib/libva{,-drm,-x11}.so*
 
-        echo "Libs: -ldl" >> "$FFBUILD_PREFIX"/lib/pkgconfig/libva.pc
+        echo "Libs: -ldl" >> "$FFBUILD_DESTPREFIX"/lib/pkgconfig/libva.pc
     fi
 }
 

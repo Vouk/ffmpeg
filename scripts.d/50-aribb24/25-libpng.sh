@@ -1,15 +1,18 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/glennrp/libpng.git"
-SCRIPT_COMMIT="44f97f08d729fcc77ea5d08e02cd538523dd7157"
+SCRIPT_COMMIT="134ab615b617f548e822d8857f1cfc0525aefeba"
+
+ffbuild_depends() {
+    echo base
+    echo zlib
+}
 
 ffbuild_enabled() {
     return 0
 }
 
 ffbuild_dockerbuild() {
-    autoreconf -i
-
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
         --disable-shared
@@ -30,5 +33,5 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 }

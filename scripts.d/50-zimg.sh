@@ -1,7 +1,7 @@
 #!/bin/bash
 
-SCRIPT_REPO="https://bitbucket.org/the-sekrit-twc/zimg.git"
-SCRIPT_COMMIT="7240030a6fb73f5530695f0f5fc06565ca221fb7"
+SCRIPT_REPO="https://github.com/sekrit-twc/zimg.git"
+SCRIPT_COMMIT="0e56801f98db3e363c974fca794fa06022d40ee4"
 
 ffbuild_enabled() {
     return 0
@@ -33,7 +33,7 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 }
 
 ffbuild_configure() {

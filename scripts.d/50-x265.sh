@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://bitbucket.org/multicoreware/x265_git.git"
-SCRIPT_COMMIT="bc608a559a730aa7e2d9490edc4ee0eab704f59c"
+SCRIPT_COMMIT="8f11c33acc267ba3f1d2bde60a6aa906e494cbde"
 
 ffbuild_enabled() {
     [[ $VARIANT == lgpl* ]] && return -1
@@ -22,6 +22,8 @@ ffbuild_dockerbuild() {
         -DCMAKE_ASM_NASM_FLAGS=-w-macro-params-legacy
         -DENABLE_ALPHA=ON
     )
+
+    sed -i '1i#include <cstdint>' source/dynamicHDR10/json11/json11.cpp
 
     if [[ $TARGET != *32 ]]; then
         mkdir 8bit 10bit 12bit
@@ -61,9 +63,9 @@ EOF
         make -j$(nproc)
     fi
 
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 
-    echo "Libs.private: -lstdc++" >> "$FFBUILD_PREFIX"/lib/pkgconfig/x265.pc
+    echo "Libs.private: -lstdc++" >> "$FFBUILD_DESTPREFIX"/lib/pkgconfig/x265.pc
 }
 
 ffbuild_configure() {

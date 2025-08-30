@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://code.videolan.org/videolan/x264.git"
-SCRIPT_COMMIT="373697b467f7cd0af88f1e9e32d4f10540df4687"
+SCRIPT_COMMIT="b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
 
 ffbuild_enabled() {
     [[ $VARIANT == lgpl* ]] && return -1
@@ -30,7 +30,7 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
+    make install DESTDIR="$FFBUILD_DESTDIR"
 }
 
 ffbuild_configure() {

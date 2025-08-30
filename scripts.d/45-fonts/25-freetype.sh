@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://gitlab.freedesktop.org/freetype/freetype.git"
-SCRIPT_COMMIT="5d4e649f740c675426fbe4cdaffc53ee2a4cb954"
+SCRIPT_COMMIT="aa2ee67b3d95585a0bfc56a834544a502853f584"
 
 ffbuild_enabled() {
     return 0
@@ -12,6 +12,7 @@ ffbuild_dockerbuild() {
 
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
+        --without-harfbuzz
         --disable-shared
         --enable-static
     )
@@ -27,13 +28,5 @@ ffbuild_dockerbuild() {
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
-    make install
-}
-
-ffbuild_configure() {
-    echo --enable-libfreetype
-}
-
-ffbuild_unconfigure() {
-    echo --disable-libfreetype
+    make install DESTDIR="$FFBUILD_DESTDIR"
 }

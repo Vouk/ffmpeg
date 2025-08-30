@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://code.videolan.org/rist/librist.git"
-SCRIPT_COMMIT="af5d2041fbc4da5faa5844d5ef8fba9d4b2a1864"
+SCRIPT_COMMIT="1a5013b59ce098465e835a0510cd395872bb1c24"
 
 ffbuild_enabled() {
     return 0
@@ -37,7 +37,9 @@ ffbuild_dockerbuild() {
 
     meson "${myconf[@]}" ..
     ninja -j"$(nproc)"
-    ninja install
+    DESTDIR="$FFBUILD_DESTDIR" ninja install
+
+    echo "Requires: mbedcrypto" >> "$FFBUILD_DESTPREFIX"/lib/pkgconfig/librist.pc
 }
 
 ffbuild_configure() {

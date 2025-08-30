@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/dyne/frei0r.git"
-SCRIPT_COMMIT="2328ce38020b48e0a0d653cd55fe918764ec7bb3"
+SCRIPT_COMMIT="b47c180376dc0ebfb9f57ca9373070eb8afcf9e9"
 
 ffbuild_enabled() {
     [[ $VARIANT == lgpl* ]] && return -1
@@ -14,13 +14,11 @@ ffbuild_dockerbuild() {
 
     cmake -DCMAKE_TOOLCHAIN_FILE="$FFBUILD_CMAKE_TOOLCHAIN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$FFBUILD_PREFIX" ..
 
-    mkdir -p "$FFBUILD_PREFIX"/lib/pkgconfig
-    cp frei0r.pc "$FFBUILD_PREFIX"/lib/pkgconfig
+    mkdir -p "$FFBUILD_DESTPREFIX"/lib/pkgconfig
+    cp frei0r.pc "$FFBUILD_DESTPREFIX"/lib/pkgconfig
 
-    mkdir -p "$FFBUILD_PREFIX"/include
-    cp ../include/frei0r.h "$FFBUILD_PREFIX"/include
-
-    cat frei0r.pc
+    mkdir -p "$FFBUILD_DESTPREFIX"/include
+    cp ../include/frei0r.h "$FFBUILD_DESTPREFIX"/include
 }
 
 ffbuild_configure() {
