@@ -1,14 +1,14 @@
 #!/bin/bash
 
-SCRIPT_REPO="https://github.com/xiph/ogg.git"
-SCRIPT_COMMIT="06a5e0262cdc28aa4ae6797627a783b5010440f0"
+SCRIPT_REPO="https://github.com/adah1972/libunibreak.git"
+SCRIPT_COMMIT="e8760630e8b73cf0187fc781383c2be136aa462d"
 
 ffbuild_enabled() {
     return 0
 }
 
 ffbuild_dockerbuild() {
-    ./autogen.sh
+    bash ./bootstrap
 
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
