@@ -145,7 +145,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64,winarm64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
+        variant: [lgpl-shared 8.1,gpl-shared 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -210,7 +210,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64,winarm64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
+        variant: [lgpl-shared 8.1,gpl-shared 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -246,7 +246,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64,winarm64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
+        variant: [lgpl-shared 8.1,gpl-shared 8.1]
     steps:
       - name: Replace spaces in string
         id: strs
