@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+	 xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+	<?define ProductVersion = "8.0" ?>
+	<?define FFmpegBinDir = "C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\" ?>
+	
+	<Product Id="*" 
+			 Name="FFmpeg $(var.ProductVersion) (GPL)" 
+			 Language="1033" 
+			 Version="$(var.ProductVersion)" 
+			 Manufacturer="The FFmpeg developers" 
+			 UpgradeCode="739DEC3C-0AD0-4769-BBEB-4D6C5EAAC6A1">
+		
+		<Package InstallerVersion="301"
+				 Compressed="yes"
+				 InstallScope="perMachine" />
+
+		<MajorUpgrade DowngradeErrorMessage="A newer version of FFmpeg is already installed." />
+		
+		<Media Id="1" Cabinet="contents.cab" EmbedCab="yes" CompressionLevel="high" />
+
+		<Feature Id="FFmpeg" Title="FFmpeg" Level="1" ConfigurableDirectory="INSTALLFOLDER" InstallDefault="local" Absent="disallow" Description="The FFmpeg main installation directory.">
+			<ComponentRef Id="FFmpeg" />
+		</Feature>
+
+		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+		<WixVariable Id="WixUILicenseRtf" Value="gpl-2.rtf" />
+
+		<UIRef Id="WixUI_InstallDir" />
+		
+	</Product>
+
+	<Fragment>
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="ProgramFiles64Folder">
+				<Directory Id="INSTALLFOLDER" Name="FFmpeg 8">
+					<Component Id="FFmpeg" Guid="FC83373A-2161-475B-951D-B62468926976">
+						<File Id="avcodec70" Source="$(var.FFmpegBinDir)avcodec-62.dll" />
+						<File Id="avdevice70" Source="$(var.FFmpegBinDir)avdevice-62.dll" />
+						<File Id="avfilter70" Source="$(var.FFmpegBinDir)avfilter-11.dll" />
+						<File Id="avformat70" Source="$(var.FFmpegBinDir)avformat-62.dll" />
+						<File Id="avutil70" Source="$(var.FFmpegBinDir)avutil-60.dll" />
+						<File Id="swresample5" Source="$(var.FFmpegBinDir)swresample-6.dll" />
+						<File Id="swscale70" Source="$(var.FFmpegBinDir)swscale-9.dll" />
+						<File Id="ffmpeg" Source="$(var.FFmpegBinDir)ffmpeg.exe" />
+						<File Id="ffplay" Source="$(var.FFmpegBinDir)ffplay.exe" />
+						<File Id="ffprobe" Source="$(var.FFmpegBinDir)ffprobe.exe" />
+						<RegistryValue Root="HKCU" Key="Software\FFmpeg-8" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+      				    <Environment Id="env_PATH" Name="PATH" Value="[INSTALLFOLDER]" Part="first" Action="set" System="yes" />
+					</Component>
+				</Directory>
+			</Directory>
+		</Directory>
+	</Fragment>
+
+</Wix>

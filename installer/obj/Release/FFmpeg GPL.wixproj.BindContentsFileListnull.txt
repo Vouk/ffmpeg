@@ -1,0 +1,10 @@
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\avcodec-62.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\avdevice-62.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\avfilter-11.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\avformat-62.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\avutil-60.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\ffmpeg.exe
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\ffplay.exe
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\ffprobe.exe
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\swresample-6.dll
+C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-gpl-shared-8.0\bin\swscale-9.dll
