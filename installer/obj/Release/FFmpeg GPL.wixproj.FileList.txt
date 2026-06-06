@@ -1,6 +1,0 @@
-C:\Users\daniel\Desktop\ffmpeg\installer\bin\x64\Release\FFmpeg (GPL) Installer.msi
-C:\Users\daniel\Desktop\ffmpeg\installer\bin\x64\Release\FFmpeg (GPL) Installer.wixpdb
-obj\\Release\gpl.wixobj
-obj\\Release\FFmpeg GPL.wixproj.BindContentsFileListnull.txt
-obj\\Release\FFmpeg GPL.wixproj.BindOutputsFileListnull.txt
-obj\\Release\FFmpeg GPL.wixproj.BindBuiltOutputsFileListnull.txt

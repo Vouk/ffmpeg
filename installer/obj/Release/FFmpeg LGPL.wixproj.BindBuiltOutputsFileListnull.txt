@@ -1,2 +1,0 @@
-C:\Users\daniel\Desktop\ffmpeg\installer\bin\x64\Release\FFmpeg (LGPL) Installer.msi
-C:\Users\daniel\Desktop\ffmpeg\installer\bin\x64\Release\FFmpeg (LGPL) Installer.wixpdb
