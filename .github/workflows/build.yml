@@ -190,7 +190,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64,winarm64]
-        variant: [gpl 8.1.1,lgpl 8.1.1]
+        variant: [gpl 8.1,lgpl 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /opt/ghc /usr/local/.ghcup /usr/local/lib/android && df -h
@@ -256,7 +256,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [win64,winarm64]
-        variant: [gpl 8.1.1,lgpl 8.1.1]
+        variant: [gpl 8.1,lgpl 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /opt/ghc /usr/local/.ghcup /usr/local/lib/android && df -h
