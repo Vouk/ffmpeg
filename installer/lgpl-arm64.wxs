@@ -3,21 +3,21 @@
 	 xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
 	<?define ProductVersion = "8.1.1" ?>
-	<?define FFmpegBinDir = "C:\Users\daniel\Downloads\ffmpeg-n8.1.1-11-ge4c7fbf6c0-win64-gpl-shared-8.1\ffmpeg-n8.1.1-11-ge4c7fbf6c0-win64-gpl-shared-8.1\bin\" ?>
-	
-	<Product Id="*" 
-			 Name="FFmpeg (GPL)" 
-			 Language="1033" 
-			 Version="$(var.ProductVersion)" 
-			 Manufacturer="The FFmpeg developers" 
-			 UpgradeCode="efdde5bd-3b27-49a1-b4e9-a5c3ac34cf82">
-		
+	<?define FFmpegBinDir = "C:\Users\daniel\Downloads\ffmpeg-n8.1.1-11-ge4c7fbf6c0-winarm64-lgpl-shared-8.1\ffmpeg-n8.1.1-11-ge4c7fbf6c0-winarm64-lgpl-shared-8.1\bin\" ?>
+
+	<Product Id="*"
+			 Name="FFmpeg (LGPL)"
+			 Language="1033"
+			 Version="$(var.ProductVersion)"
+			 Manufacturer="The FFmpeg developers"
+			 UpgradeCode="cd12239f-a47e-49ba-86cc-092a54517f7c">
+
 		<Package InstallerVersion="301"
 				 Compressed="yes"
 				 InstallScope="perMachine" />
 
 		<MajorUpgrade DowngradeErrorMessage="A newer version of FFmpeg is already installed." />
-		
+
 		<Media Id="1" Cabinet="contents.cab" EmbedCab="yes" CompressionLevel="high" />
 
 		<Feature Id="FFmpeg" Title="FFmpeg" Level="1" ConfigurableDirectory="INSTALLFOLDER" InstallDefault="local" Absent="disallow" Description="The FFmpeg main installation directory.">
@@ -26,10 +26,10 @@
 
 		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
-		<WixVariable Id="WixUILicenseRtf" Value="gpl-2.rtf" />
+		<WixVariable Id="WixUILicenseRtf" Value="lgpl-2.1.rtf" />
 
 		<UIRef Id="WixUI_InstallDir" />
-		
+
 	</Product>
 
 	<Fragment>
@@ -48,7 +48,7 @@
 						<File Id="ffplay" Source="$(var.FFmpegBinDir)ffplay.exe" />
 						<File Id="ffprobe" Source="$(var.FFmpegBinDir)ffprobe.exe" />
 						<RegistryValue Root="HKCU" Key="Software\FFmpeg" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
-      				    <Environment Id="env_PATH" Name="PATH" Value="[INSTALLFOLDER]" Part="first" Action="set" System="yes" />
+						<Environment Id="env_PATH" Name="PATH" Value="[INSTALLFOLDER]" Part="first" Action="set" System="yes" />
 					</Component>
 				</Directory>
 			</Directory>

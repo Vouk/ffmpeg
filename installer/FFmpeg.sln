@@ -3,9 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31912.275
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg GPL", "FFmpeg GPL.wixproj", "{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}"
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg GPL x64", "FFmpeg GPL x64.wixproj", "{A44CE8BD-CF4F-4DD4-83E7-2311673F523A}"
 EndProject
-Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg LGPL", "FFmpeg LGPL.wixproj", "{DE353D43-0681-4E81-A222-33098EA99CBE}"
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg LGPL x64", "FFmpeg LGPL x64.wixproj", "{DE353D43-0681-4E81-A222-33098EA99CBE}"
+EndProject
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg LGPL arm64", "FFmpeg LGPL arm64.wixproj", "{8B7010FA-A945-4DF5-9D6F-A4276DA76458}"
+EndProject
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "FFmpeg GPL arm64", "FFmpeg GPL arm64.wixproj", "{64C5D35E-60CF-4C8D-988F-67C2EB8D4601}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +25,14 @@ Global
 		{DE353D43-0681-4E81-A222-33098EA99CBE}.Debug|x64.Build.0 = Debug|x64
 		{DE353D43-0681-4E81-A222-33098EA99CBE}.Release|x64.ActiveCfg = Release|x64
 		{DE353D43-0681-4E81-A222-33098EA99CBE}.Release|x64.Build.0 = Release|x64
+		{8B7010FA-A945-4DF5-9D6F-A4276DA76458}.Debug|x64.ActiveCfg = Debug|x64
+		{8B7010FA-A945-4DF5-9D6F-A4276DA76458}.Debug|x64.Build.0 = Debug|x64
+		{8B7010FA-A945-4DF5-9D6F-A4276DA76458}.Release|x64.ActiveCfg = Release|x64
+		{8B7010FA-A945-4DF5-9D6F-A4276DA76458}.Release|x64.Build.0 = Release|x64
+		{64C5D35E-60CF-4C8D-988F-67C2EB8D4601}.Debug|x64.ActiveCfg = Debug|x64
+		{64C5D35E-60CF-4C8D-988F-67C2EB8D4601}.Debug|x64.Build.0 = Debug|x64
+		{64C5D35E-60CF-4C8D-988F-67C2EB8D4601}.Release|x64.ActiveCfg = Release|x64
+		{64C5D35E-60CF-4C8D-988F-67C2EB8D4601}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
