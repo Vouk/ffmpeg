@@ -2,15 +2,15 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
 	 xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
-	<?define ProductVersion = "8.0" ?>
-	<?define FFmpegBinDir = "C:\Users\daniel\Desktop\ffmpeg-n8.0-3-g08a81b090b-win64-lgpl-shared-8.0\bin\" ?>
+	<?define ProductVersion = "7.1" ?>
+	<?define FFmpegBinDir = "C:\Users\daniel\Downloads\ffmpeg-n7.1-7-g63f5c007a7-win64-lgpl-shared-7.1\bin\" ?>
 
 	<Product Id="*"
-			 Name="FFmpeg $(var.ProductVersion) (LGPL)"
+			 Name="FFmpeg (LGPL)"
 			 Language="1033"
 			 Version="$(var.ProductVersion)"
 			 Manufacturer="The FFmpeg developers"
-			 UpgradeCode="739DEC3C-0AD0-4769-BBEB-4D6C5EAAC6A1">
+			 UpgradeCode="cd12239f-a47e-49ba-86cc-092a54517f7c">
 
 		<Package InstallerVersion="301"
 				 Compressed="yes"
@@ -35,19 +35,19 @@
 	<Fragment>
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="ProgramFiles64Folder">
-				<Directory Id="INSTALLFOLDER" Name="FFmpeg 8">
+				<Directory Id="INSTALLFOLDER" Name="FFmpeg">
 					<Component Id="FFmpeg" Guid="FC83373A-2161-475B-951D-B62468926976">
-						<File Id="avcodec70" Source="$(var.FFmpegBinDir)avcodec-62.dll" />
-						<File Id="avdevice70" Source="$(var.FFmpegBinDir)avdevice-62.dll" />
-						<File Id="avfilter70" Source="$(var.FFmpegBinDir)avfilter-11.dll" />
-						<File Id="avformat70" Source="$(var.FFmpegBinDir)avformat-62.dll" />
-						<File Id="avutil70" Source="$(var.FFmpegBinDir)avutil-60.dll" />
-						<File Id="swresample5" Source="$(var.FFmpegBinDir)swresample-6.dll" />
-						<File Id="swscale70" Source="$(var.FFmpegBinDir)swscale-9.dll" />
+						<File Id="avcodec70" Source="$(var.FFmpegBinDir)avcodec-61.dll" />
+						<File Id="avdevice70" Source="$(var.FFmpegBinDir)avdevice-61.dll" />
+						<File Id="avfilter70" Source="$(var.FFmpegBinDir)avfilter-10.dll" />
+						<File Id="avformat70" Source="$(var.FFmpegBinDir)avformat-61.dll" />
+						<File Id="avutil70" Source="$(var.FFmpegBinDir)avutil-59.dll" />
+						<File Id="swresample5" Source="$(var.FFmpegBinDir)swresample-5.dll" />
+						<File Id="swscale70" Source="$(var.FFmpegBinDir)swscale-8.dll" />
 						<File Id="ffmpeg" Source="$(var.FFmpegBinDir)ffmpeg.exe" />
 						<File Id="ffplay" Source="$(var.FFmpegBinDir)ffplay.exe" />
 						<File Id="ffprobe" Source="$(var.FFmpegBinDir)ffprobe.exe" />
-						<RegistryValue Root="HKCU" Key="Software\FFmpeg-8" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+						<RegistryValue Root="HKCU" Key="Software\FFmpeg" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
 						<Environment Id="env_PATH" Name="PATH" Value="[INSTALLFOLDER]" Part="first" Action="set" System="yes" />
 					</Component>
 				</Directory>

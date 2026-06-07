@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [win64]
+        target: [win64,winarm64]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -144,8 +144,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [win64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
+        target: [win64,winarm64]
+        variant: [lgpl-shared 8.1,gpl-shared 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -209,8 +209,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [win64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
+        target: [win64,winarm64]
+        variant: [lgpl-shared 8.1,gpl-shared 8.1]
     steps:
       - name: Free Disk-Space
         run: df -h && sudo apt-get clean && docker system prune -a -f && sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc && df -h
@@ -237,21 +237,6 @@ jobs:
           name: ffmpeg-${{ steps.strs.outputs.artifact_slug }}
           overwrite: true
           path: artifacts/*
-  build-installer:
-    name: Build installer
-    if: ${{ ( github.event.inputs.buildOnly == 'true' && !cancelled() ) || success() }}
-    needs: build_ffmpeg
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [win64]
-        variant: [lgpl-shared 8.0,gpl-shared 8.0]
-    steps:
-      - name: Replace spaces in string
-        id: strs
-        run: |
-          ls -laR
   publish_release:
     name: Publish release
     if: ${{ !cancelled() && ( github.event_name == 'schedule' || github.event.inputs.doRelease == 'true' ) && needs.build_ffmpeg.result == 'success' }}

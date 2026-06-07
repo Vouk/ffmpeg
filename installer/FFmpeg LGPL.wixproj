@@ -29,7 +29,7 @@
   <PropertyGroup>
     <PreBuildEvent />
     <Name>FFmpeg LGPL</Name>
-    <OutputName>FFmpeg 8.0 LGPL</OutputName>
+    <OutputName>FFmpeg 8.1 LGPL</OutputName>
     <ProjectGuid>{de353d43-0681-4e81-a222-33098ea99cbe}</ProjectGuid>
   </PropertyGroup>
   <PropertyGroup>
