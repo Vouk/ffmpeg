@@ -10,7 +10,7 @@ on:
       doRelease:
         description: 'Publish new release'
         type: boolean
-        default: false
+        default: true
         required: false
       buildOnly:
         description: 'Only build ffmpeg'
