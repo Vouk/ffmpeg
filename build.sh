@@ -27,6 +27,14 @@ GIT_BRANCH="${GIT_BRANCH_OVERRIDE:-$GIT_BRANCH}"
 BUILD_SCRIPT="$(mktemp)"
 trap "rm -f -- '$BUILD_SCRIPT'" EXIT
 
+# Patches in patches/ffmpeg/<version>/ (e.g. 8.0 for release/8.0) are applied
+# with git am directly after cloning FFmpeg.
+FFMPEG_PATCH_DIR="patches/ffmpeg/${GIT_BRANCH#release/}"
+PATCH_ARGS=()
+if [[ -d "$FFMPEG_PATCH_DIR" ]]; then
+    PATCH_ARGS=( -v "$PWD/$FFMPEG_PATCH_DIR":/patches:ro )
+fi
+
 RPATH_LDEXEFLAGS=''
 if [[ $TARGET == linux* && $VARIANT == *shared* ]]; then
     RPATH_LDEXEFLAGS=' -Wl,-rpath,\\\$\$ORIGIN/../lib'
@@ -40,6 +48,12 @@ cat <<EOF >"$BUILD_SCRIPT"
     git clone --filter=blob:none --branch='$GIT_BRANCH' '$FFMPEG_REPO' ffmpeg
     cd ffmpeg
 
+    for patch in /patches/*.patch; do
+        [[ -f "\$patch" ]] || continue
+        echo "Applying \$patch"
+        git -c user.name=Builder -c user.email=builder@localhost am --committer-date-is-author-date "\$patch"
+    done
+
     ./configure --prefix=/ffbuild/prefix --pkg-config-flags="--static" \$FFBUILD_TARGET_FLAGS \$FF_CONFIGURE \
         --extra-cflags="\$FF_CFLAGS" --extra-cxxflags="\$FF_CXXFLAGS" --extra-libs="\$FF_LIBS" \
         --extra-ldflags="\$FF_LDFLAGS" --extra-ldexeflags="\$FF_LDEXEFLAGS"'$RPATH_LDEXEFLAGS' \
@@ -51,7 +65,7 @@ EOF
 
 [[ -t 1 ]] && TTY_ARG="-t" || TTY_ARG=""
 
-docker run --rm -i $TTY_ARG "${UIDARGS[@]}" -v "$PWD/ffbuild":/ffbuild -v "$BUILD_SCRIPT":/build.sh "$IMAGE" bash /build.sh
+docker run --rm -i $TTY_ARG "${UIDARGS[@]}" -v "$PWD/ffbuild":/ffbuild -v "$BUILD_SCRIPT":/build.sh "${PATCH_ARGS[@]}" "$IMAGE" bash /build.sh
 
 if [[ -n "$FFBUILD_OUTPUT_DIR" ]]; then
     mkdir -p "$FFBUILD_OUTPUT_DIR"
