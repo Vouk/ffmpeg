@@ -30,9 +30,16 @@ for TAG in ${LATEST_TAGS[@]} ${MONTHLY_TAGS[@]}; do
     TAGS=( "${TAGS[@]/$TAG}" )
 done
 
+RELEASE_TAGS="$(gh release list --limit 1000 --json tagName --jq '.[].tagName')"
+
 for TAG in ${TAGS[@]}; do
     echo "Deleting ${TAG}"
-    gh release delete --cleanup-tag --yes "${TAG}"
+    if grep -qxF "${TAG}" <<< "${RELEASE_TAGS}"; then
+        gh release delete --cleanup-tag --yes "${TAG}"
+    else
+        # Tag without a release: drop it locally, the push below removes it remotely
+        git tag -d "${TAG}"
+    fi
 done
 
 git push --tags --prune
