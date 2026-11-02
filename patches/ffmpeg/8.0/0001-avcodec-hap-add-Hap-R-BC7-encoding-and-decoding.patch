@@ -1,7 +1,7 @@
-From 48c06eb195e898751bde8ef3d83b01efee76da7d Mon Sep 17 00:00:00 2001
+From e776b823c9ae18830094ac1c3c8552242c7aefc1 Mon Sep 17 00:00:00 2001
 From: Daniel Stankewitz <daniel@voukoder.org>
 Date: Fri, 30 Oct 2026 11:48:55 +0100
-Subject: [PATCH] avcodec/hap: add Hap R (BC7) encoding and decoding
+Subject: [PATCH 1/2] avcodec/hap: add Hap R (BC7) encoding and decoding
 
 Hap R stores RGBA frames as BC7 (BPTC) textures, FourCC Hap7, top-level
 section types 0xAC, 0xBC and 0xCC.
@@ -20,19 +20,19 @@ none second-stage compressors and chunking like the other Hap formats.
 Add a BC7 block decoder to texturedsp and Hap7 to the Hap decoder and the
 mov tag table, so that Hap R files can be probed and decoded.
 ---
- doc/encoders.texi          |   3 +
- libavcodec/Makefile        |   4 +-
- libavcodec/bc7.c           | 303 ++++++++++++
- libavcodec/bc7.h           | 102 +++++
- libavcodec/bc7enc.c        | 912 +++++++++++++++++++++++++++++++++++++
- libavcodec/hap.h           |   1 +
- libavcodec/hapdec.c        |  10 +-
- libavcodec/hapenc.c        |   9 +-
- libavcodec/texturedsp.c    |   2 +
- libavcodec/texturedsp.h    |   2 +
- libavcodec/texturedspenc.c |   2 +
- libavformat/isom_tags.c    |   1 +
- 12 files changed, 1347 insertions(+), 4 deletions(-)
+ doc/encoders.texi          |    3 +
+ libavcodec/Makefile        |    4 +-
+ libavcodec/bc7.c           |  303 +++++++++
+ libavcodec/bc7.h           |  102 +++
+ libavcodec/bc7enc.c        | 1204 ++++++++++++++++++++++++++++++++++++
+ libavcodec/hap.h           |    1 +
+ libavcodec/hapdec.c        |   10 +-
+ libavcodec/hapenc.c        |    9 +-
+ libavcodec/texturedsp.c    |    2 +
+ libavcodec/texturedsp.h    |    2 +
+ libavcodec/texturedspenc.c |    2 +
+ libavformat/isom_tags.c    |    1 +
+ 12 files changed, 1639 insertions(+), 4 deletions(-)
  create mode 100644 libavcodec/bc7.c
  create mode 100644 libavcodec/bc7.h
  create mode 100644 libavcodec/bc7enc.c
@@ -485,10 +485,10 @@ index 0000000000..6255672823
 +#endif /* AVCODEC_BC7_H */
 diff --git a/libavcodec/bc7enc.c b/libavcodec/bc7enc.c
 new file mode 100644
-index 0000000000..27973b130a
+index 0000000000..34eaf7fc39
 --- /dev/null
 +++ b/libavcodec/bc7enc.c
-@@ -0,0 +1,912 @@
+@@ -0,0 +1,1204 @@
 +/*
 + * BC7 (BPTC) texture block encoder
 + * Copyright (C) 2026 Daniel Stankewitz
@@ -583,6 +583,13 @@ index 0000000000..27973b130a
 +    { 0x8080, 0x0808 }, { 0x1010, 0xeeee }, { 0x000a, 0xfff0 }, { 0x08ce, 0x7310 },
 +};
 +
++/* the interpolation weights of ff_bc7_weights, visible to the compiler */
++static const uint8_t bc7_weights[5][16] = {
++    [2] = { 0, 21, 43, 64 },
++    [3] = { 0, 9, 18, 27, 37, 46, 55, 64 },
++    [4] = { 0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64 },
++};
++
 +static const int bc7_pairs[2] = { 6, 10 }; /* channel pairs for 3 and 4 channels */
 +
 +static const float bc7_inv[17] = {
@@ -642,7 +649,7 @@ index 0000000000..27973b130a
 + * @param dq   expanded 8 bit value of the result
 + * @return the quantized value without p-bit
 + */
-+static int bc7_quant(float v, int bits, int pbit, int *dq)
++static av_always_inline int bc7_quant(float v, int bits, int pbit, int *dq)
 +{
 +    const int has_p = pbit >= 0;
 +    const int n     = bits + has_p;
@@ -668,53 +675,86 @@ index 0000000000..27973b130a
 +    return d;
 +}
 +
++/* The pixels of a subset, copied together once per subset. */
++typedef struct BC7Pixels {
++    uint8_t p[16][4];
++    float   f[4][16];   ///< the same values per channel
++} BC7Pixels;
++
++static av_always_inline void bc7_gather(BC7Pixels *sp, const uint8_t (*px)[4],
++                                        const uint8_t *sel, int n)
++{
++    for (int i = 0; i < n; i++) {
++        AV_COPY32(sp->p[i], px[sel[i]]);
++        for (int c = 0; c < 4; c++)
++            sp->f[c][i] = sp->p[i][c];
++    }
++}
++
 +/**
 + * Select the best index for every pixel of a subset given its endpoints.
 + *
 + * @return the squared error, or UINT32_MAX if it would reach bound
 + */
-+static av_always_inline uint32_t bc7_assign_vec(const uint8_t (*px)[4],
-+                                                const uint8_t *sel, int n, int nch,
++static av_always_inline uint32_t bc7_assign_vec(const BC7Pixels *sp, int n, int nch,
 +                                                const int *d0, const int *d1, int ib,
 +                                                uint8_t *idx, uint32_t bound)
 +{
-+    const uint8_t *w = ff_bc7_weights[ib];
++    const uint8_t *w = bc7_weights[ib];
 +    const int nidx = 1 << ib;
-+    int pal[16][4], dir[4], len2 = 0;
++    /* palette at offset 1, with an entry on both sides that is farther from
++     * every pixel than any palette colour, so that the walk needs no bound
++     * checks */
++    int pal[16 + 2][4], dir[4], len2 = 0, start[16];
 +    uint32_t total = 0;
-+    float scale;
++    float scale, fd0[4], fdir[4];
 +
 +    for (int c = 0; c < nch; c++) {
 +        dir[c] = d1[c] - d0[c];
 +        len2  += dir[c] * dir[c];
++        fd0[c]  = d0[c];
++        fdir[c] = dir[c];
 +    }
 +    scale = len2 ? (nidx - 1) / (float)len2 : 0.0f;
-+    for (int k = 0; k < nidx; k++)
++    for (int c = 0; c < nch; c++) {
++        pal[0][c] = pal[nidx + 1][c] = 1 << 14;
++        /* (d0 * (64 - w) + d1 * w + 32) >> 6 */
++        for (int k = 0; k < nidx; k++)
++            pal[k + 1][c] = d0[c] + ((dir[c] * w[k] + 32) >> 6);
++    }
++
++    /* initial guesses from the projection onto the endpoint line, in a loop
++     * of their own that can be vectorized; the products and their sum are
++     * integers below 2^24 and exact as floats */
++    for (int i = 0; i < n; i++) {
++        float dot = 0.0f;
 +        for (int c = 0; c < nch; c++)
-+            pal[k][c] = (d0[c] * (64 - w[k]) + d1[c] * w[k] + 32) >> 6;
++            dot += (sp->f[c][i] - fd0[c]) * fdir[c];
++        start[i] = (int)av_clipf(dot * scale + 0.5f, 0.0f, nidx - 1);
++    }
 +
 +    for (int i = 0; i < n; i++) {
-+        const uint8_t *p = px[sel[i]];
-+        int k, e, e2, dot = 0;
++        const uint8_t *p = sp->p[i];
++        int k = start[i] + 1, e, em, ep, down, up;
 +
-+        /* initial guess from the projection onto the endpoint line */
-+        for (int c = 0; c < nch; c++)
-+            dot += (p[c] - d0[c]) * dir[c];
-+        k = av_clip((int)(dot * scale + 0.5f), 0, nidx - 1);
-+        /* the palette is monotonic in every channel, walk to the local minimum */
-+        e = bc7_dist(p, pal[k], nch);
-+        if (k > 0 && (e2 = bc7_dist(p, pal[k - 1], nch)) < e) {
-+            do {
-+                e = e2;
-+                k--;
-+            } while (k > 0 && (e2 = bc7_dist(p, pal[k - 1], nch)) < e);
-+        } else {
-+            while (k < nidx - 1 && (e2 = bc7_dist(p, pal[k + 1], nch)) < e) {
-+                e = e2;
-+                k++;
++        /* the palette is monotonic in every channel, walk to the local
++         * minimum, preferring the lower neighbour; the first step is
++         * computed without branches */
++        e    = bc7_dist(p, pal[k],     nch);
++        em   = bc7_dist(p, pal[k - 1], nch);
++        ep   = bc7_dist(p, pal[k + 1], nch);
++        down = em < e;
++        up   = !down & (ep < e);
++        e    = down ? em : up ? ep : e;
++        k   += up - down;
++        if (down | up) {
++            const int step = up - down;
++            while ((em = bc7_dist(p, pal[k + step], nch)) < e) {
++                e  = em;
++                k += step;
 +            }
 +        }
-+        idx[i] = k;
++        idx[i] = k - 1;
 +        total += e;
 +        if (total >= bound)
 +            return UINT32_MAX;
@@ -722,37 +762,31 @@ index 0000000000..27973b130a
 +    return total;
 +}
 +
-+static uint32_t bc7_assign_vec3(const uint8_t (*px)[4], const uint8_t *sel, int n,
-+                                const int *d0, const int *d1, int ib,
-+                                uint8_t *idx, uint32_t bound)
-+{
-+    return bc7_assign_vec(px, sel, n, 3, d0, d1, ib, idx, bound);
-+}
-+
-+static uint32_t bc7_assign_vec4(const uint8_t (*px)[4], const uint8_t *sel, int n,
-+                                const int *d0, const int *d1, int ib,
-+                                uint8_t *idx, uint32_t bound)
-+{
-+    return bc7_assign_vec(px, sel, n, 4, d0, d1, ib, idx, bound);
-+}
-+
 +/* Quantize a pair of endpoints with every allowed p-bit combination and keep
-+ * the best result in res. */
-+static void bc7_try_endpoints(const uint8_t (*px)[4], const uint8_t *sel, int n,
-+                              int nch, int bits, enum BC7PBits pmode, int ib,
-+                              const float *e0, const float *e1,
-+                              BC7Subset *res, uint32_t bound)
++ * the best result in res. prev holds the quantized endpoints of the previous
++ * pass (if any) and is updated, combinations that were already evaluated with
++ * the same endpoints are skipped. */
++static av_always_inline void bc7_try_endpoints(const BC7Pixels *sp, int n, int nch,
++                                               int bits, enum BC7PBits pmode, int ib,
++                                               const float *e0, const float *e1,
++                                               uint8_t (*prev)[2][4], int have_prev,
++                                               BC7Subset *res, uint32_t bound)
 +{
 +    /* range of p-bit values, -1 for modes without p-bits */
 +    const int pmin = pmode == BC7_PBIT_NONE ? -1 : pmode == BC7_PBIT_ONE ? 1 : 0;
 +    const int pmax = pmode == BC7_PBIT_NONE ? -1 : 1;
 +    uint8_t q[2][2][4];     /* [endpoint][p-bit][channel] */
-+    int d[2][2][4];
++    int d[2][2][4], same[2][2];
 +
 +    for (int p = pmin; p <= pmax; p++) {
++        const int pi = FFMAX(p, 0);
 +        for (int c = 0; c < nch; c++) {
-+            q[0][FFMAX(p, 0)][c] = bc7_quant(e0[c], bits, p, &d[0][FFMAX(p, 0)][c]);
-+            q[1][FFMAX(p, 0)][c] = bc7_quant(e1[c], bits, p, &d[1][FFMAX(p, 0)][c]);
++            q[0][pi][c] = bc7_quant(e0[c], bits, p, &d[0][pi][c]);
++            q[1][pi][c] = bc7_quant(e1[c], bits, p, &d[1][pi][c]);
++        }
++        for (int e = 0; e < 2; e++) {
++            same[e][pi] = have_prev && !memcmp(q[e][pi], prev[e][pi], nch);
++            memcpy(prev[e][pi], q[e][pi], nch);
 +        }
 +    }
 +
@@ -763,12 +797,11 @@ index 0000000000..27973b130a
 +
 +            if (pmode == BC7_PBIT_SHARED && p0 != p1)
 +                continue;
-+            if (nch == 3)
-+                err = bc7_assign_vec3(px, sel, n, d[0][p0], d[1][p1], ib, idx,
-+                                      FFMIN(res->err, bound));
-+            else
-+                err = bc7_assign_vec4(px, sel, n, d[0][p0], d[1][p1], ib, idx,
-+                                      FFMIN(res->err, bound));
++            /* same result as in the previous pass */
++            if (same[0][p0] && same[1][p1])
++                continue;
++            err = bc7_assign_vec(sp, n, nch, d[0][p0], d[1][p1], ib, idx,
++                                 FFMIN(res->err, bound));
 +            if (err < res->err) {
 +                res->err = err;
 +                memcpy(res->q[0], q[0][p0], nch);
@@ -782,11 +815,10 @@ index 0000000000..27973b130a
 +}
 +
 +/* Least squares fit of the endpoints to the pixels for the given indices. */
-+static int bc7_least_squares(const uint8_t (*px)[4], const uint8_t *sel, int n,
-+                             int nch, int ib, const uint8_t *idx,
-+                             float *e0, float *e1)
++static av_always_inline int bc7_least_squares(const BC7Pixels *sp, int n, int nch, int ib,
++                                              const uint8_t *idx, float *e0, float *e1)
 +{
-+    const uint8_t *w = ff_bc7_weights[ib];
++    const uint8_t *w = bc7_weights[ib];
 +    float a = 0.0f, b = 0.0f, c = 0.0f, det;
 +    float x0[4] = { 0.0f }, x1[4] = { 0.0f };
 +
@@ -797,8 +829,8 @@ index 0000000000..27973b130a
 +        b += s * t;
 +        c += t * t;
 +        for (int ch = 0; ch < nch; ch++) {
-+            x0[ch] += s * px[sel[i]][ch];
-+            x1[ch] += t * px[sel[i]][ch];
++            x0[ch] += s * sp->f[ch][i];
++            x1[ch] += t * sp->f[ch][i];
 +        }
 +    }
 +    det = a * c - b * b;
@@ -813,7 +845,7 @@ index 0000000000..27973b130a
 +}
 +
 +/* Principal axis of a covariance matrix by power iteration. */
-+static void bc7_principal_axis(const float cov[4][4], int nch, float *axis)
++static av_always_inline void bc7_principal_axis(const float cov[4][4], int nch, float *axis)
 +{
 +    float v[4], len = 0.0f, maxd = 0.0f;
 +    int k = 0;
@@ -852,20 +884,16 @@ index 0000000000..27973b130a
 +        axis[c] = v[c] * len;
 +}
 +
-+/**
-+ * Encode the endpoints and indices of one subset.
-+ *
-+ * @param sel   pixels of the subset
-+ * @param nch   number of channels coded with the shared indices (3 or 4)
-+ * @param bits  endpoint bits without p-bits
-+ * @param iters least squares refinement passes
-+ * @return the squared error, or UINT32_MAX if it would reach bound
-+ */
-+static uint32_t bc7_encode_subset(const uint8_t (*px)[4], const uint8_t *sel, int n,
-+                                  int nch, int bits, enum BC7PBits pmode, int ib,
-+                                  int iters, BC7Subset *res, uint32_t bound)
++/* Initial endpoints of a subset: the extent of its pixels along the
++ * principal axis. */
++typedef struct BC7Line {
++    float e0[4], e1[4];
++} BC7Line;
++
++static av_always_inline void bc7_subset_line_tmpl(const uint8_t (*px)[4], const uint8_t *sel,
++                                                  int n, int nch, BC7Line *line)
 +{
-+    float mean[4] = { 0.0f }, cov[4][4] = { { 0.0f } }, axis[4], e0[4], e1[4];
++    float mean[4] = { 0.0f }, cov[4][4] = { { 0.0f } }, axis[4];
 +    float tmin = FLT_MAX, tmax = -FLT_MAX;
 +
 +    for (int i = 0; i < n; i++)
@@ -895,50 +923,182 @@ index 0000000000..27973b130a
 +        tmax = FFMAX(tmax, t);
 +    }
 +    for (int c = 0; c < nch; c++) {
-+        e0[c] = av_clipf(mean[c] + tmin * axis[c], 0.0f, 255.0f);
-+        e1[c] = av_clipf(mean[c] + tmax * axis[c], 0.0f, 255.0f);
++        line->e0[c] = av_clipf(mean[c] + tmin * axis[c], 0.0f, 255.0f);
++        line->e1[c] = av_clipf(mean[c] + tmax * axis[c], 0.0f, 255.0f);
 +    }
++}
 +
++static void bc7_subset_line(const uint8_t (*px)[4], const uint8_t *sel, int n,
++                            int nch, BC7Line *line)
++{
++    if (nch == 3)
++        bc7_subset_line_tmpl(px, sel, n, 3, line);
++    else
++        bc7_subset_line_tmpl(px, sel, n, 4, line);
++}
++
++/* Initial endpoints of the subsets of a few partitions, shared by the modes
++ * that code the same pixels with the same channels. */
++#define BC7_LINE_CACHE 4
++
++typedef struct BC7LineCache {
++    int n;
++    struct {
++        uint8_t partition;
++        uint8_t valid;      ///< subsets with a computed line
++        BC7Line line[3];
++    } e[BC7_LINE_CACHE];
++} BC7LineCache;
++
++static const BC7Line *bc7_get_line(BC7LineCache *lc, const uint8_t (*px)[4],
++                                   int partition, int s, const uint8_t *sel,
++                                   int n, int nch, BC7Line *tmp)
++{
++    int i = 0;
++
++    if (lc) {
++        while (i < lc->n && lc->e[i].partition != partition)
++            i++;
++        if (i == lc->n && i < BC7_LINE_CACHE) {
++            lc->e[i].partition = partition;
++            lc->e[i].valid     = 0;
++            lc->n++;
++        }
++    }
++    if (!lc || i == BC7_LINE_CACHE) {
++        bc7_subset_line(px, sel, n, nch, tmp);
++        return tmp;
++    }
++    if (!(lc->e[i].valid >> s & 1)) {
++        bc7_subset_line(px, sel, n, nch, &lc->e[i].line[s]);
++        lc->e[i].valid |= 1 << s;
++    }
++    return &lc->e[i].line[s];
++}
++
++/**
++ * Encode the endpoints and indices of one subset.
++ *
++ * @param sel   pixels of the subset
++ * @param nch   number of channels coded with the shared indices (3 or 4)
++ * @param bits  endpoint bits without p-bits
++ * @param line  initial endpoints
++ * @return the squared error, or UINT32_MAX if it would reach bound
++ */
++static av_always_inline uint32_t bc7_encode_subset_tmpl(const uint8_t (*px)[4],
++                                                        const uint8_t *sel, int n,
++                                                        int nch, int bits,
++                                                        enum BC7PBits pmode, int ib,
++                                                        const BC7Line *line,
++                                                        BC7Subset *res, uint32_t bound)
++{
++    float e0[4], e1[4];
++    uint8_t prev[2][2][4];
++    BC7Pixels sp;
++
++    bc7_gather(&sp, px, sel, n);
++    memcpy(e0, line->e0, sizeof(e0));
++    memcpy(e1, line->e1, sizeof(e1));
 +    res->err = UINT32_MAX;
 +    for (int it = 0; ; it++) {
-+        bc7_try_endpoints(px, sel, n, nch, bits, pmode, ib, e0, e1, res, bound);
-+        if (it == iters || !res->err || res->err == UINT32_MAX)
++        const uint32_t err = res->err;
++
++        bc7_try_endpoints(&sp, n, nch, bits, pmode, ib, e0, e1, prev, it > 0, res, bound);
++        if (it == BC7_REFINE_ITERS || !res->err || res->err == UINT32_MAX)
 +            break;
-+        if (!bc7_least_squares(px, sel, n, nch, ib, res->idx, e0, e1))
++        /* the same indices would give the same endpoints again */
++        if (it && res->err == err)
++            break;
++        if (!bc7_least_squares(&sp, n, nch, ib, res->idx, e0, e1))
 +            break;
 +    }
 +    return res->err;
 +}
 +
-+static uint32_t bc7_assign_scalar(const uint8_t (*px)[4], int ch, int d0, int d1,
-+                                  int ib, uint8_t *idx, uint32_t bound)
++/* the subset encoder for every combination of channels, endpoint bits, p-bits
++ * and index bits that the modes use */
++#define BC7_SUBSET_FUNC(name, nch, bits, pmode, ib)                                    \
++static uint32_t name(const uint8_t (*px)[4], const uint8_t *sel, int n,               \
++                     const BC7Line *line, BC7Subset *res, uint32_t bound)              \
++{                                                                                      \
++    return bc7_encode_subset_tmpl(px, sel, n, nch, bits, pmode, ib, line, res, bound); \
++}
++
++BC7_SUBSET_FUNC(bc7_encode_subset_m0,  3, 4, BC7_PBIT_ENDPOINT, 3)
++BC7_SUBSET_FUNC(bc7_encode_subset_m1,  3, 6, BC7_PBIT_SHARED,   3)
++BC7_SUBSET_FUNC(bc7_encode_subset_m2,  3, 5, BC7_PBIT_NONE,     2)
++BC7_SUBSET_FUNC(bc7_encode_subset_m3,  3, 7, BC7_PBIT_ENDPOINT, 2)
++BC7_SUBSET_FUNC(bc7_encode_subset_m4a, 3, 5, BC7_PBIT_NONE,     2)
++BC7_SUBSET_FUNC(bc7_encode_subset_m4b, 3, 5, BC7_PBIT_NONE,     3)
++BC7_SUBSET_FUNC(bc7_encode_subset_m5,  3, 7, BC7_PBIT_NONE,     2)
++BC7_SUBSET_FUNC(bc7_encode_subset_m6o, 3, 7, BC7_PBIT_ONE,      4)
++BC7_SUBSET_FUNC(bc7_encode_subset_m6,  4, 7, BC7_PBIT_ENDPOINT, 4)
++BC7_SUBSET_FUNC(bc7_encode_subset_m7,  4, 5, BC7_PBIT_ENDPOINT, 2)
++
++/**
++ * Encode the endpoints and indices of one subset.
++ *
++ * @param mode  block mode
++ * @param isb   index selection bit (mode 4)
++ * @param pmode p-bit mode, BC7_PBIT_ONE for opaque mode 6 blocks
++ * @param line  initial endpoints
++ * @return the squared error, or UINT32_MAX if it would reach bound
++ */
++static uint32_t bc7_encode_subset(const uint8_t (*px)[4], const uint8_t *sel, int n,
++                                  int mode, int isb, enum BC7PBits pmode,
++                                  const BC7Line *line, BC7Subset *res, uint32_t bound)
 +{
-+    const uint8_t *w = ff_bc7_weights[ib];
++    switch (mode) {
++    case 0:  return bc7_encode_subset_m0(px, sel, n, line, res, bound);
++    case 1:  return bc7_encode_subset_m1(px, sel, n, line, res, bound);
++    case 2:  return bc7_encode_subset_m2(px, sel, n, line, res, bound);
++    case 3:  return bc7_encode_subset_m3(px, sel, n, line, res, bound);
++    case 4:  return isb ? bc7_encode_subset_m4b(px, sel, n, line, res, bound)
++                        : bc7_encode_subset_m4a(px, sel, n, line, res, bound);
++    case 5:  return bc7_encode_subset_m5(px, sel, n, line, res, bound);
++    case 6:  return pmode == BC7_PBIT_ONE ? bc7_encode_subset_m6o(px, sel, n, line, res, bound)
++                                          : bc7_encode_subset_m6(px, sel, n, line, res, bound);
++    default: return bc7_encode_subset_m7(px, sel, n, line, res, bound);
++    }
++}
++
++static av_always_inline uint32_t bc7_assign_scalar(const uint8_t *val, int d0, int d1,
++                                                   int ib, uint8_t *idx, uint32_t bound)
++{
++    const uint8_t *w = bc7_weights[ib];
 +    const int nidx = 1 << ib;
 +    const float scale = d1 != d0 ? (nidx - 1) / (float)(d1 - d0) : 0.0f;
 +    uint32_t total = 0;
-+    int pal[16];
++    /* palette at offset 1 between two entries farther from every value */
++    int pal[16 + 2], start[16];
 +
++    pal[0] = pal[nidx + 1] = 1 << 14;
 +    for (int k = 0; k < nidx; k++)
-+        pal[k] = (d0 * (64 - w[k]) + d1 * w[k] + 32) >> 6;
++        pal[k + 1] = d0 + (((d1 - d0) * w[k] + 32) >> 6);
++    /* initial guesses, in a loop of their own that can be vectorized */
++    for (int i = 0; i < 16; i++)
++        start[i] = av_clip((int)((val[i] - d0) * scale + 0.5f), 0, nidx - 1) + 1;
 +    for (int i = 0; i < 16; i++) {
-+        const int v = px[i][ch];
-+        int k = av_clip((int)((v - d0) * scale + 0.5f), 0, nidx - 1);
-+        int e = (v - pal[k]) * (v - pal[k]), e2;
++        const int v = val[i];
++        int k  = start[i];
++        int e  = (v - pal[k]) * (v - pal[k]);
++        int em = (v - pal[k - 1]) * (v - pal[k - 1]);
++        int ep = (v - pal[k + 1]) * (v - pal[k + 1]);
++        const int down = em < e;
++        const int up   = !down & (ep < e);
 +
-+        /* the palette is monotonic, so the local minimum is the global one */
-+        if (k > 0 && (e2 = (v - pal[k - 1]) * (v - pal[k - 1])) < e) {
-+            do {
-+                e = e2;
-+                k--;
-+            } while (k > 0 && (e2 = (v - pal[k - 1]) * (v - pal[k - 1])) < e);
-+        } else {
-+            while (k < nidx - 1 && (e2 = (v - pal[k + 1]) * (v - pal[k + 1])) < e) {
-+                e = e2;
-+                k++;
++        /* the palette is monotonic, walk to the local minimum as in
++         * bc7_assign_vec */
++        e  = down ? em : up ? ep : e;
++        k += up - down;
++        if (down | up) {
++            const int step = up - down;
++            while ((em = (v - pal[k + step]) * (v - pal[k + step])) < e) {
++                e  = em;
++                k += step;
 +            }
 +        }
-+        idx[i] = k;
++        idx[i] = k - 1;
 +        total += e;
 +        if (total >= bound)
 +            return UINT32_MAX;
@@ -947,23 +1107,25 @@ index 0000000000..27973b130a
 +}
 +
 +/* Encode the separately indexed scalar channel of modes 4 and 5. */
-+static uint32_t bc7_encode_scalar(const uint8_t (*px)[4], int ch, int bits, int ib,
-+                                  uint8_t *q, uint8_t *idx, uint32_t bound)
++static av_always_inline uint32_t bc7_encode_scalar_tmpl(const uint8_t (*px)[4], int ch,
++                                                        int bits, int ib, uint8_t *q,
++                                                        uint8_t *idx, uint32_t bound)
 +{
 +    const int maxq = (1 << bits) - 1;
 +    uint32_t best = UINT32_MAX;
 +    int vmin = 255, vmax = 0, dq, q0, q1;
-+    uint8_t tmp[16];
++    uint8_t tmp[16], val[16];
 +
 +    for (int i = 0; i < 16; i++) {
-+        vmin = FFMIN(vmin, px[i][ch]);
-+        vmax = FFMAX(vmax, px[i][ch]);
++        val[i] = px[i][ch];
++        vmin   = FFMIN(vmin, val[i]);
++        vmax   = FFMAX(vmax, val[i]);
 +    }
 +    q0 = bc7_quant(vmin, bits, -1, &dq);
 +    q1 = bc7_quant(vmax, bits, -1, &dq);
 +    for (int a = FFMAX(q0 - 1, 0); a <= FFMIN(q0 + 1, maxq); a++) {
 +        for (int b = FFMAX(q1 - 1, 0); b <= FFMIN(q1 + 1, maxq); b++) {
-+            const uint32_t err = bc7_assign_scalar(px, ch, bc7_unquant(a, bits),
++            const uint32_t err = bc7_assign_scalar(val, bc7_unquant(a, bits),
 +                                                   bc7_unquant(b, bits), ib, tmp,
 +                                                   FFMIN(best, bound));
 +            if (err < best) {
@@ -979,10 +1141,24 @@ index 0000000000..27973b130a
 +    return best;
 +}
 +
++/* the scalar channel of mode 5 has 8 bit endpoints and 2 bit indices, the one
++ * of mode 4 6 bit endpoints and 3 or 2 bit indices */
++static uint32_t bc7_encode_scalar(const uint8_t (*px)[4], int ch, int bits, int ib,
++                                  uint8_t *q, uint8_t *idx, uint32_t bound)
++{
++    if (bits == 8)
++        return bc7_encode_scalar_tmpl(px, ch, 8, 2, q, idx, bound);
++    if (ib == 3)
++        return bc7_encode_scalar_tmpl(px, ch, 6, 3, q, idx, bound);
++    return bc7_encode_scalar_tmpl(px, ch, 6, 2, q, idx, bound);
++}
++
 +/* Encode a block with one of the modes without separate alpha indices
-+ * (0, 1, 2, 3, 6, 7) and the given partition. */
++ * (0, 1, 2, 3, 6, 7) and the given partition. lc may hold the initial
++ * endpoints of the partition from a mode with the same subsets and channels. */
 +static uint32_t bc7_encode_partition(const uint8_t (*px)[4], int mode, int partition,
-+                                     int opaque, BC7Block *b, uint32_t bound)
++                                     int opaque, BC7LineCache *lc, BC7Block *b,
++                                     uint32_t bound)
 +{
 +    const BC7ModeInfo *mi = &ff_bc7_modes[mode];
 +    const uint8_t *part   = bc7_partition_row(mi->ns, partition);
@@ -998,15 +1174,18 @@ index 0000000000..27973b130a
 +    }
 +
 +    for (int s = 0; s < mi->ns; s++) {
++        const BC7Line *line;
 +        BC7Subset sub;
++        BC7Line tmp;
 +        uint8_t sel[16];
 +        int n = 0;
 +
 +        for (int i = 0; i < 16; i++)
 +            if (part[i] == s)
 +                sel[n++] = i;
-+        if (bc7_encode_subset(px, sel, n, nch, mi->cb, pmode, mi->ib,
-+                              BC7_REFINE_ITERS, &sub, bound - total) == UINT32_MAX)
++        line = bc7_get_line(lc, px, partition, s, sel, n, nch, &tmp);
++        if (bc7_encode_subset(px, sel, n, mode, 0, pmode, line, &sub,
++                              bound - total) == UINT32_MAX)
 +            return UINT32_MAX;
 +        total += sub.err;
 +        for (int e = 0; e < 2; e++) {
@@ -1027,15 +1206,16 @@ index 0000000000..27973b130a
 +}
 +
 +/* Encode a block with mode 4 or 5, the given channel rotation and index
-+ * selection. */
++ * selection. lc holds the initial colour endpoints per rotation. */
 +static uint32_t bc7_encode_mode45(const uint8_t (*src)[4], int mode, int rotation,
-+                                  int isb, BC7Block *b, uint32_t bound)
++                                  int isb, BC7LineCache *lc, BC7Block *b, uint32_t bound)
 +{
 +    const BC7ModeInfo *mi = &ff_bc7_modes[mode];
-+    const int cib = isb ? mi->ib2 : mi->ib;
 +    const int aib = isb ? mi->ib  : mi->ib2;
 +    uint8_t px[16][4], aq[2];
++    const BC7Line *line;
 +    BC7Subset sub;
++    BC7Line tmp;
 +    uint32_t aerr;
 +
 +    memcpy(px, src, sizeof(px));
@@ -1046,8 +1226,9 @@ index 0000000000..27973b130a
 +    aerr = bc7_encode_scalar(px, 3, mi->ab, aib, aq, b->aidx, bound);
 +    if (aerr == UINT32_MAX)
 +        return UINT32_MAX;
-+    if (bc7_encode_subset(px, bc7_all_pixels, 16, 3, mi->cb, BC7_PBIT_NONE, cib,
-+                          BC7_REFINE_ITERS, &sub, bound - aerr) == UINT32_MAX)
++    line = bc7_get_line(lc, px, rotation, 0, bc7_all_pixels, 16, 3, &tmp);
++    if (bc7_encode_subset(px, bc7_all_pixels, 16, mode, isb, BC7_PBIT_NONE, line,
++                          &sub, bound - aerr) == UINT32_MAX)
 +        return UINT32_MAX;
 +
 +    for (int e = 0; e < 2; e++) {
@@ -1094,101 +1275,199 @@ index 0000000000..27973b130a
 +    memset(b->cidx, 1, sizeof(b->cidx));
 +}
 +
-+/* Error estimate of a subset from its first and second order statistics:
-+ * the residual orthogonal to the principal axis and the variance along it.
-+ * The variance along the axis is approximated by the Rayleigh quotient of the
-+ * covariance matrix row of the channel with the largest variance. */
-+static av_always_inline void bc7_subset_estimate(int n, const int *s, const int *q,
-+                                                 int nch, float *perp, float *along)
-+{
-+    float cov[4][4], t[4], inv, lam, tr = 0.0f, vv = 0.0f, vt = 0.0f, maxd = -1.0f;
-+    int k = 0, j = 0;
++#define BC7_NV    15    ///< channel sums, channel products of 4 channels, pixel count
++#define BC7_LANES 16    ///< partitions estimated together
 +
-+    if (n < 2)
-+        return;
-+    inv = bc7_inv[n];
-+    for (int c = 0; c < nch; c++) {
-+        for (int d = c; d < nch; d++, j++)
-+            cov[c][d] = cov[d][c] = q[j] - s[c] * (float)s[d] * inv;
-+        tr += cov[c][c];
-+        if (cov[c][c] > maxd) {
-+            maxd = cov[c][c];
-+            k    = c;
++/* First and second order statistics of a block, per pixel row: sums of the
++ * channel values, the channel products and the pixel count over the pixels
++ * selected by every 4 bit mask. A subset is the sum of one entry per row.
++ * All sums are integers below 2^24 and therefore exact as floats. */
++typedef struct BC7Stats {
++    float row[4][16][BC7_NV];
++    float total[BC7_NV];
++} BC7Stats;
++
++static av_always_inline void bc7_block_stats(const uint8_t (*px)[4], int nch, BC7Stats *st)
++{
++    const int nv = nch + bc7_pairs[nch - 3] + 1;
++
++    for (int r = 0; r < 4; r++) {
++        for (int j = 0; j < nv; j++)
++            st->row[r][0][j] = 0.0f;
++        for (int b = 0; b < 4; b++) {
++            const uint8_t *p = px[4 * r + b];
++            float v[BC7_NV];
++            int j = nch;
++
++            for (int c = 0; c < nch; c++) {
++                v[c] = p[c];
++                for (int d = c; d < nch; d++)
++                    v[j++] = p[c] * p[d];
++            }
++            v[j] = 1.0f;
++            /* the masks with bit b as their highest bit */
++            for (int m = 1 << b; m < 2 << b; m++)
++                for (j = 0; j < nv; j++)
++                    st->row[r][m][j] = st->row[r][m - (1 << b)][j] + v[j];
 +        }
 +    }
-+    if (tr <= 0.0f)
-+        return;
-+    for (int r = 0; r < nch; r++) {
-+        t[r] = 0.0f;
-+        for (int c = 0; c < nch; c++)
-+            t[r] += cov[r][c] * cov[k][c];
-+        vv += cov[k][r] * cov[k][r];
-+        vt += cov[k][r] * t[r];
-+    }
-+    lam    = av_clipf(vt / vv, 0.0f, tr);
-+    *perp += tr - lam;
++    for (int j = 0; j < nv; j++)
++        st->total[j] = st->row[0][15][j] + st->row[1][15][j] +
++                       st->row[2][15][j] + st->row[3][15][j];
++}
++
++/* Error estimates of one subset of BC7_LANES partitions from its statistics
++ * s (channel sums followed by the channel products): the residual orthogonal
++ * to the principal axis and the variance along it. The variance along the
++ * axis is approximated by the Rayleigh quotient of the covariance matrix row
++ * of the channel with the largest variance. Subsets with fewer than 2 pixels
++ * have a zero trace and are skipped. The loops have no branches, so that
++ * they can be vectorized. */
++static av_always_inline void bc7_estimate_add(float tr, float vv, float vt, int n,
++                                              float *perp, float *along)
++{
++    /* products with 0 and 1 instead of branches, all terms are finite */
++    const float use = tr > 0.0f ? 1.0f : 0.0f;
++    const float lam = av_clipf(vt / vv, 0.0f, tr);
++
++    *perp  += (tr - lam) * use;
 +    /* two pixels are hit exactly by the endpoints */
-+    if (n > 2)
-+        *along += lam;
++    *along += lam * (n > 2 ? use : 0.0f);
++}
++
++static void bc7_subset_estimates_rgb(const float (*s)[BC7_LANES], const float *inv,
++                                     const int *n, float *perp, float *along)
++{
++    for (int l = 0; l < BC7_LANES; l++) {
++        const float r = s[0][l], g = s[1][l], b = s[2][l], k = inv[l];
++        const float c00 = s[3][l] - r * r * k, c01 = s[4][l] - r * g * k;
++        const float c02 = s[5][l] - r * b * k, c11 = s[6][l] - g * g * k;
++        const float c12 = s[7][l] - g * b * k, c22 = s[8][l] - b * b * k;
++        const float tr  = c00 + c11 + c22;
++        float v0 = c00, v1 = c01, v2 = c02, maxd = c00 > -1.0f ? c00 : -1.0f;
++        float t0, t1, t2;
++        int larger;
++
++        larger = c11 > maxd;
++        maxd   = larger ? c11 : maxd;
++        v0     = larger ? c01 : v0;
++        v1     = larger ? c11 : v1;
++        v2     = larger ? c12 : v2;
++        larger = c22 > maxd;
++        v0     = larger ? c02 : v0;
++        v1     = larger ? c12 : v1;
++        v2     = larger ? c22 : v2;
++
++        t0 = c00 * v0 + c01 * v1 + c02 * v2;
++        t1 = c01 * v0 + c11 * v1 + c12 * v2;
++        t2 = c02 * v0 + c12 * v1 + c22 * v2;
++        bc7_estimate_add(tr, v0 * v0 + v1 * v1 + v2 * v2, v0 * t0 + v1 * t1 + v2 * t2,
++                         n[l], &perp[l], &along[l]);
++    }
++}
++
++static void bc7_subset_estimates_rgba(const float (*s)[BC7_LANES], const float *inv,
++                                      const int *n, float *perp, float *along)
++{
++    for (int l = 0; l < BC7_LANES; l++) {
++        const float r = s[0][l], g = s[1][l], b = s[2][l], a = s[3][l], k = inv[l];
++        const float c00 = s[ 4][l] - r * r * k, c01 = s[ 5][l] - r * g * k;
++        const float c02 = s[ 6][l] - r * b * k, c03 = s[ 7][l] - r * a * k;
++        const float c11 = s[ 8][l] - g * g * k, c12 = s[ 9][l] - g * b * k;
++        const float c13 = s[10][l] - g * a * k, c22 = s[11][l] - b * b * k;
++        const float c23 = s[12][l] - b * a * k, c33 = s[13][l] - a * a * k;
++        const float tr  = c00 + c11 + c22 + c33;
++        float v0 = c00, v1 = c01, v2 = c02, v3 = c03, maxd = c00 > -1.0f ? c00 : -1.0f;
++        float t0, t1, t2, t3;
++        int larger;
++
++        larger = c11 > maxd;
++        maxd   = larger ? c11 : maxd;
++        v0     = larger ? c01 : v0;
++        v1     = larger ? c11 : v1;
++        v2     = larger ? c12 : v2;
++        v3     = larger ? c13 : v3;
++        larger = c22 > maxd;
++        maxd   = larger ? c22 : maxd;
++        v0     = larger ? c02 : v0;
++        v1     = larger ? c12 : v1;
++        v2     = larger ? c22 : v2;
++        v3     = larger ? c23 : v3;
++        larger = c33 > maxd;
++        v0     = larger ? c03 : v0;
++        v1     = larger ? c13 : v1;
++        v2     = larger ? c23 : v2;
++        v3     = larger ? c33 : v3;
++
++        t0 = c00 * v0 + c01 * v1 + c02 * v2 + c03 * v3;
++        t1 = c01 * v0 + c11 * v1 + c12 * v2 + c13 * v3;
++        t2 = c02 * v0 + c12 * v1 + c22 * v2 + c23 * v3;
++        t3 = c03 * v0 + c13 * v1 + c23 * v2 + c33 * v3;
++        bc7_estimate_add(tr, v0 * v0 + v1 * v1 + v2 * v2 + v3 * v3,
++                         v0 * t0 + v1 * t1 + v2 * t2 + v3 * t3,
++                         n[l], &perp[l], &along[l]);
++    }
 +}
 +
 +/* Error estimates of all partitions of a 2- or 3-subset mode. */
-+static av_always_inline void bc7_partition_estimates(const uint8_t (*px)[4], int ns, int nch,
++static av_always_inline void bc7_partition_estimates(const BC7Stats *st, int ns, int nch,
 +                                                     float *perp, float *along)
 +{
-+    /* per pixel: channel values followed by the channel products */
-+    const int nv = nch + bc7_pairs[nch - 3];
-+    int stats[16][14], total[14] = { 0 };
++    const int nv = nch + bc7_pairs[nch - 3] + 1;
 +
-+    for (int i = 0; i < 16; i++) {
-+        int j = nch;
-+        for (int c = 0; c < nch; c++) {
-+            stats[i][c] = px[i][c];
-+            for (int d = c; d < nch; d++)
-+                stats[i][j++] = px[i][c] * px[i][d];
-+        }
-+        for (j = 0; j < nv; j++)
-+            total[j] += stats[i][j];
-+    }
++    for (int p0 = 0; p0 < 64; p0 += BC7_LANES) {
++        float s[3][BC7_NV][BC7_LANES], inv[3][BC7_LANES];
++        int n[3][BC7_LANES];
 +
-+    for (int p = 0; p < 64; p++) {
-+        int st[3][14], n[3] = { 16, 0, 0 };
++        /* sums of the second and third subset, the first is the rest */
++        for (int l = 0; l < BC7_LANES; l++) {
++            const int p = p0 + l;
++            float rest[BC7_NV];
 +
-+        /* accumulate the second and third subset, the first is the rest */
-+        memcpy(st[0], total, sizeof(total));
-+        for (int k = 1; k < ns; k++) {
-+            unsigned mask = ns == 2 ? bc7_mask2[p] : bc7_mask3[p][k - 1];
-+            memset(st[k], 0, sizeof(st[k]));
-+            while (mask) {
-+                const int i = ff_ctz(mask);
-+                mask &= mask - 1;
-+                n[k]++;
-+                for (int j = 0; j < nv; j++)
-+                    st[k][j] += stats[i][j];
++            memcpy(rest, st->total, sizeof(rest));
++            for (int k = 1; k < ns; k++) {
++                const unsigned m = ns == 2 ? bc7_mask2[p] : bc7_mask3[p][k - 1];
++                const float *r0 = st->row[0][m & 15],      *r1 = st->row[1][m >> 4 & 15];
++                const float *r2 = st->row[2][m >> 8 & 15], *r3 = st->row[3][m >> 12];
++
++                for (int j = 0; j < nv; j++) {
++                    const float sum = r0[j] + r1[j] + r2[j] + r3[j];
++                    s[k][j][l] = sum;
++                    rest[j]   -= sum;
++                }
++                n[k][l]   = s[k][nv - 1][l];
++                inv[k][l] = bc7_inv[n[k][l]];
 +            }
-+            n[0] -= n[k];
 +            for (int j = 0; j < nv; j++)
-+                st[0][j] -= st[k][j];
++                s[0][j][l] = rest[j];
++            n[0][l]   = rest[nv - 1];
++            inv[0][l] = bc7_inv[n[0][l]];
 +        }
-+        perp[p] = along[p] = 0.0f;
-+        for (int k = 0; k < ns; k++)
-+            bc7_subset_estimate(n[k], st[k], st[k] + nch, nch, &perp[p], &along[p]);
++
++        for (int l = 0; l < BC7_LANES; l++)
++            perp[p0 + l] = along[p0 + l] = 0.0f;
++        for (int k = 0; k < ns; k++) {
++            if (nch == 3)
++                bc7_subset_estimates_rgb(s[k], inv[k], n[k], perp + p0, along + p0);
++            else
++                bc7_subset_estimates_rgba(s[k], inv[k], n[k], perp + p0, along + p0);
++        }
 +    }
 +}
 +
-+static void bc7_estimates_2subsets_rgb(const uint8_t (*px)[4], float *perp, float *along)
++static void bc7_estimates_2subsets_rgb(const BC7Stats *st, float *perp, float *along)
 +{
-+    bc7_partition_estimates(px, 2, 3, perp, along);
++    bc7_partition_estimates(st, 2, 3, perp, along);
 +}
 +
-+static void bc7_estimates_3subsets_rgb(const uint8_t (*px)[4], float *perp, float *along)
++static void bc7_estimates_3subsets_rgb(const BC7Stats *st, float *perp, float *along)
 +{
-+    bc7_partition_estimates(px, 3, 3, perp, along);
++    bc7_partition_estimates(st, 3, 3, perp, along);
 +}
 +
-+static void bc7_estimates_2subsets_rgba(const uint8_t (*px)[4], float *perp, float *along)
++static void bc7_estimates_2subsets_rgba(const BC7Stats *st, float *perp, float *along)
 +{
-+    bc7_partition_estimates(px, 2, 4, perp, along);
++    bc7_partition_estimates(st, 2, 4, perp, along);
 +}
 +
 +/**
@@ -1227,61 +1506,74 @@ index 0000000000..27973b130a
 +
 +static void bc7_try_partitions(const uint8_t (*px)[4], int mode, int opaque,
 +                               const float *perp, const float *along, int np,
-+                               int ncand, BC7Block *best)
++                               int ncand, BC7LineCache *lc, BC7Block *best)
 +{
 +    int cand[BC7_MAX_CANDIDATES], n;
 +    BC7Block b;
 +
 +    n = bc7_select_partitions(perp, along, np, 1 << ff_bc7_modes[mode].ib, cand, ncand);
 +    for (int i = 0; i < n && best->err; i++)
-+        if (bc7_encode_partition(px, mode, cand[i], opaque, &b, best->err) < best->err)
++        if (bc7_encode_partition(px, mode, cand[i], opaque, lc, &b, best->err) < best->err)
 +            *best = b;
 +}
 +
 +static void bc7_search_opaque(const uint8_t (*px)[4], BC7Block *best)
 +{
 +    float perp[64], along[64];
++    BC7LineCache lc;
++    BC7Stats st;
 +    BC7Block b;
 +
-+    if (bc7_encode_partition(px, 6, 0, 1, &b, best->err) < best->err)
++    lc.n = 0;
++    /* modes 6 and 5 code all pixels with RGB, as do modes 1 and 3 or modes
++     * 0 and 2 the subsets of the same partition */
++    if (bc7_encode_partition(px, 6, 0, 1, &lc, &b, best->err) < best->err)
 +        *best = b;
 +    if (!best->err)
 +        return;
-+    if (bc7_encode_mode45(px, 5, 0, 0, &b, best->err) < best->err)
++    if (bc7_encode_mode45(px, 5, 0, 0, &lc, &b, best->err) < best->err)
 +        *best = b;
 +    if (!best->err)
 +        return;
 +
-+    bc7_estimates_2subsets_rgb(px, perp, along);
-+    bc7_try_partitions(px, 1, 1, perp, along, 64, BC7_CANDIDATES_2, best);
-+    bc7_try_partitions(px, 3, 1, perp, along, 64, BC7_CANDIDATES_2, best);
++    bc7_block_stats(px, 3, &st);
++    bc7_estimates_2subsets_rgb(&st, perp, along);
++    lc.n = 0;
++    bc7_try_partitions(px, 1, 1, perp, along, 64, BC7_CANDIDATES_2, &lc, best);
++    bc7_try_partitions(px, 3, 1, perp, along, 64, BC7_CANDIDATES_2, &lc, best);
 +    if (best->err <= BC7_SKIP_3SUBSETS)
 +        return;
 +
-+    bc7_estimates_3subsets_rgb(px, perp, along);
-+    bc7_try_partitions(px, 0, 1, perp, along, 16, BC7_CANDIDATES_3, best);
-+    bc7_try_partitions(px, 2, 1, perp, along, 64, BC7_CANDIDATES_3, best);
++    bc7_estimates_3subsets_rgb(&st, perp, along);
++    lc.n = 0;
++    bc7_try_partitions(px, 0, 1, perp, along, 16, BC7_CANDIDATES_3, &lc, best);
++    bc7_try_partitions(px, 2, 1, perp, along, 64, BC7_CANDIDATES_3, &lc, best);
 +}
 +
 +static void bc7_search_alpha(const uint8_t (*px)[4], BC7Block *best)
 +{
 +    float perp[64], along[64];
++    BC7LineCache lc;
++    BC7Stats st;
 +    BC7Block b;
 +
-+    if (bc7_encode_partition(px, 6, 0, 0, &b, best->err) < best->err)
++    lc.n = 0;
++    if (bc7_encode_partition(px, 6, 0, 0, NULL, &b, best->err) < best->err)
 +        *best = b;
++    /* modes 5 and 4 share the colour endpoints of every rotation */
 +    for (int rot = 0; rot < 4 && best->err; rot++)
-+        if (bc7_encode_mode45(px, 5, rot, 0, &b, best->err) < best->err)
++        if (bc7_encode_mode45(px, 5, rot, 0, &lc, &b, best->err) < best->err)
 +            *best = b;
 +    for (int rot = 0; rot < 4 && best->err; rot++)
 +        for (int isb = 0; isb < 2 && best->err; isb++)
-+            if (bc7_encode_mode45(px, 4, rot, isb, &b, best->err) < best->err)
++            if (bc7_encode_mode45(px, 4, rot, isb, &lc, &b, best->err) < best->err)
 +                *best = b;
 +    if (best->err <= BC7_SKIP_MODE7)
 +        return;
 +
-+    bc7_estimates_2subsets_rgba(px, perp, along);
-+    bc7_try_partitions(px, 7, 0, perp, along, 64, BC7_CANDIDATES_2, best);
++    bc7_block_stats(px, 4, &st);
++    bc7_estimates_2subsets_rgba(&st, perp, along);
++    bc7_try_partitions(px, 7, 0, perp, along, 64, BC7_CANDIDATES_2, NULL, best);
 +}
 +
 +/* Reorder the endpoints so that the most significant bit of every anchor

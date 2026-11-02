@@ -1,0 +1,42 @@
+From 99da537ef64c2acce2a000eaf4451a9c3ff6f077 Mon Sep 17 00:00:00 2001
+From: Daniel Stankewitz <daniel@voukoder.org>
+Date: Mon, 2 Nov 2026 18:30:00 +0100
+Subject: [PATCH 2/2] avcodec/hapenc: improve multithreading
+
+Hap is intra-only and the encoder keeps no state between frames, so like
+the dxv encoder it can use frame threading. With the default thread count
+one thread per CPU is used instead of at most 16 slice threads.
+
+The BC7 encoding time of Hap R differs a lot between blocks. With slice
+threading, one slice per row of blocks instead of one per thread keeps all
+threads busy until the end of the frame.
+---
+ libavcodec/hapenc.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/libavcodec/hapenc.c b/libavcodec/hapenc.c
+index 4c78f9eeb9..27268a1535 100644
+--- a/libavcodec/hapenc.c
++++ b/libavcodec/hapenc.c
+@@ -283,6 +283,10 @@ static av_cold int hap_init(AVCodecContext *avctx)
+     }
+     ctx->enc.raw_ratio = 16;
+     ctx->enc.slice_count = av_clip(avctx->thread_count, 1, avctx->height / TEXTURE_BLOCK_H);
++    /* The BC7 encoding time varies a lot between blocks, one slice per row of
++     * blocks keeps all threads busy. */
++    if (ctx->opt_tex_fmt == HAP_FMT_RGBABPTC && ctx->enc.slice_count > 1)
++        ctx->enc.slice_count = avctx->height / TEXTURE_BLOCK_H;
+ 
+     /* Texture compression ratio is constant, so can we computer
+      * beforehand the final size of the uncompressed buffer. */
+@@ -362,6 +366,7 @@ const FFCodec ff_hap_encoder = {
+     .p.type         = AVMEDIA_TYPE_VIDEO,
+     .p.id           = AV_CODEC_ID_HAP,
+     .p.capabilities = AV_CODEC_CAP_DR1 | AV_CODEC_CAP_SLICE_THREADS |
++                      AV_CODEC_CAP_FRAME_THREADS |
+                       AV_CODEC_CAP_ENCODER_REORDERED_OPAQUE,
+     .priv_data_size = sizeof(HapContext),
+     .p.priv_class   = &hapenc_class,
+-- 
+2.43.7
+
